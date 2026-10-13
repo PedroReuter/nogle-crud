@@ -15,6 +15,10 @@ import {
   mdiContentSave,
   mdiFilterRemoveOutline,
   mdiInformationOutline,
+  mdiEmailOutline,
+  mdiEyeOffOutline,
+  mdiEyeOutline,
+  mdiLogout,
   mdiPencilOutline,
 } from '@mdi/js'
 import { createVuetify } from 'vuetify'
@@ -114,6 +118,10 @@ export const vuetify = createVuetify({
       success: mdiCheckCircleOutline,
       error: mdiAlertCircleOutline,
       info: mdiInformationOutline,
+      showPassword: mdiEyeOutline,
+      hidePassword: mdiEyeOffOutline,
+      logout: mdiLogout,
+      email: mdiEmailOutline,
     },
   },
 

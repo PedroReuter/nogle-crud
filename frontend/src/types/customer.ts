@@ -131,3 +131,32 @@ export interface PaginatedResponse<T> {
   data: T[]
   meta: PaginationMeta
 }
+
+/* ----------------------------------------------------------------------
+ * Usuário autenticado
+ * ------------------------------------------------------------------- */
+
+export type UserRole = 'admin' | 'viewer'
+
+/**
+ * Usuário da sessão, como `/api/me` e `/api/login` o devolvem.
+ *
+ * As permissões chegam resolvidas pelo backend em vez de serem inferidas do
+ * papel aqui. Se um terceiro perfil surgir, a interface não precisa aprender
+ * a regra — e não há risco de a inferência do frontend divergir da Policy.
+ */
+export interface AuthenticatedUser {
+  id: number
+  name: string
+  email: string
+  role: UserRole
+  role_label: string
+  permissions: {
+    manage_customers: boolean
+  }
+}
+
+export interface Credentials {
+  email: string
+  password: string
+}

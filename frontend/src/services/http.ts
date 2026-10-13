@@ -119,3 +119,44 @@ function defaultMessageFor(status: number): string {
         : 'Não foi possível concluir a operação.'
   }
 }
+
+/* ----------------------------------------------------------------------
+ * Sessão expirada
+ * ------------------------------------------------------------------- */
+
+type UnauthenticatedHandler = () => void
+
+let onUnauthenticated: UnauthenticatedHandler | null = null
+
+/**
+ * Registra o que fazer quando o servidor responde 401.
+ *
+ * Um callback, e não um import direto do composable de sessão, para evitar
+ * dependência circular: o composable de sessão usa este módulo para falar
+ * com a API, e este módulo precisa avisá-lo quando a sessão cai.
+ *
+ * Importa porque a sessão pode expirar entre duas ações do usuário. Sem
+ * isto, a aplicação continuaria mostrando a tela de clientes e cada
+ * requisição falharia em silêncio.
+ */
+export function setUnauthenticatedHandler(handler: UnauthenticatedHandler): void {
+  onUnauthenticated = handler
+}
+
+http.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    const apiError = toApiError(error)
+
+    // O 401 do próprio /api/me durante a verificação inicial é esperado
+    // para quem não está autenticado e não deve disparar o tratamento de
+    // sessão expirada — não havia sessão para expirar.
+    const url = error instanceof AxiosError ? (error.config?.url ?? '') : ''
+
+    if (apiError.isUnauthenticated && !url.endsWith('/me') && !url.endsWith('/login')) {
+      onUnauthenticated?.()
+    }
+
+    return Promise.reject(error)
+  },
+)

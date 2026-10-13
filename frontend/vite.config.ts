@@ -44,6 +44,12 @@ export default defineConfig({
         target: API_TARGET,
         changeOrigin: true,
       },
+
+      // O endpoint que emite o cookie de CSRF fica fora do prefixo `/api`.
+      // Sem encaminhá-lo, o navegador recebe 404 do servidor do Vite, o
+      // login segue sem o cookie e o Laravel recusa a requisição com 419.
+      '/sanctum': { target: API_TARGET, changeOrigin: true },
+
       '/up': { target: API_TARGET, changeOrigin: true },
     },
   },

@@ -7,6 +7,7 @@ import CustomerCardList from '@/components/CustomerCardList.vue'
 import CustomerFilters from '@/components/CustomerFilters.vue'
 import CustomerFormDialog from '@/components/CustomerFormDialog.vue'
 import CustomerTable from '@/components/CustomerTable.vue'
+import { useAuth } from '@/composables/useAuth'
 import { useCustomerList } from '@/composables/useCustomerList'
 import { useNotifications } from '@/composables/useNotifications'
 import { deactivateCustomer, reactivateCustomer } from '@/services/customers'
@@ -40,17 +41,14 @@ const confirmAction = ref<'deactivate' | 'reactivate'>('deactivate')
 const confirmLoading = ref(false)
 
 /**
- * Permissão de escrita.
+ * Permissão de escrita, vinda do perfil do usuário autenticado.
  *
- * Fixa em `true` nesta etapa: a autenticação e as Policies entram na Etapa 3,
- * quando passará a refletir o perfil do usuário. A prop já existe nos
- * componentes para que a mudança seja de uma linha, e porque esconder a ação
- * depois seria retrabalho.
- *
- * A restrição visual nunca é a garantia: a autorização é verificada no
- * backend, e a interface apenas evita oferecer o que será recusado.
+ * A restrição visual nunca é a garantia: a autorização é verificada pela
+ * Policy no backend, e uma requisição forjada direto à API encontra a mesma
+ * verificação. Esconder a ação aqui apenas evita oferecer ao usuário algo
+ * que seria recusado.
  */
-const canManage = ref(true)
+const { canManageCustomers: canManage } = useAuth()
 
 onMounted(() => list.fetchPage())
 
@@ -158,6 +156,18 @@ function onSort(sort: SortableColumn, direction: 'asc' | 'desc'): void {
         Novo cliente
       </v-btn>
     </div>
+
+    <!-- Sem este aviso, o perfil de leitura veria uma tela sem o botão de
+         cadastro e sem explicação, o que parece defeito. -->
+    <v-alert
+      v-if="!canManage"
+      type="info"
+      variant="tonal"
+      density="comfortable"
+      class="mb-4"
+      role="status"
+      text="Seu perfil permite apenas consultar e filtrar clientes."
+    />
 
     <CustomerFilters
       v-model:name="list.filters.value.name"
