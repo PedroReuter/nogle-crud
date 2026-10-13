@@ -1,0 +1,198 @@
+name: CI
+
+# Roda em todo push e em toda proposta de mudança para a branch principal.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Uma execução por referência: um push novo cancela a verificação ainda em
+# curso da versão anterior, que já não interessa.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend — formatação, análise estática e testes
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # A mesma versão do ambiente Docker e do desenvolvimento local.
+        # Testar contra outra versão deixaria passar justamente o que
+        # depende do PostgreSQL: unaccent, pg_trgm e as constraints CHECK.
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nogle_crud_test
+          POSTGRES_USER: nogle
+          POSTGRES_PASSWORD: senha-de-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nogle -d nogle_crud_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          # Sem sqlite de propósito: a suíte roda contra PostgreSQL, e a
+          # ausência da extensão garante que ninguém reintroduza um teste
+          # que dependa dela sem perceber.
+          extensions: pdo_pgsql, mbstring, intl, zip, curl, openssl
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache das dependências do Composer
+        uses: actions/cache@v4
+        with:
+          path: backend/vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Instalar dependências
+        # `--no-interaction` e `--prefer-dist` para um ambiente sem terminal.
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Verificar formatação
+        # `--test` reprova sem corrigir: o pipeline aponta o problema, não o
+        # esconde reformatando.
+        run: ./vendor/bin/pint --test
+
+      - name: Análise estática
+        run: ./vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+      - name: Preparar ambiente de teste
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Executar testes
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: nogle_crud_test
+          DB_USERNAME: nogle
+          DB_PASSWORD: senha-de-ci
+          SANCTUM_STATEFUL_DOMAINS: localhost
+        run: ./vendor/bin/pest
+
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend — lint, tipos, testes e build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        # `npm ci` falha se o package-lock.json estiver fora de sincronia
+        # com o package.json, o que mantém a instalação reproduzível.
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Verificação de tipos
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm run test
+
+      - name: Build
+        # O build é verificação: erro de template ou de tipo que escapa aos
+        # testes aparece aqui.
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  security:
+    name: Dependências — avisos de segurança
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      - name: Auditar dependências PHP
+        working-directory: backend
+        run: composer audit --no-interaction
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Auditar dependências JavaScript
+        working-directory: frontend
+        # `--audit-level=high` reprova em alta e crítica. Avisos de baixa
+        # severidade em dependência de desenvolvimento não devem travar a
+        # entrega, mas ficam visíveis no log.
+        run: npm audit --audit-level=high
+
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker — construção das imagens
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir a imagem da aplicação
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Construir a imagem do servidor web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/nginx/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Validar o docker-compose
+        run: |
+          cp .env.example .env
+          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=senha-de-ci/' .env
+          docker compose config --quiet
