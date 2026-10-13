@@ -312,10 +312,18 @@ describe('desempenho da listagem', function (): void {
         // acrescentar um acesso a relação dentro do Resource, este teste
         // falha.
         Customer::factory()->count(3)->create();
+
         $consultas = [];
         DB::listen(function ($q) use (&$consultas): void {
-            $consultas[] = $q->sql;
+            // Conta apenas o que toca a tabela de clientes. As consultas de
+            // sessão e de usuário autenticado variam entre a primeira
+            // requisição e as seguintes, por causa do cache do guard, e
+            // poluiriam a comparação sem nada dizer sobre N+1.
+            if (str_contains($q->sql, 'customers')) {
+                $consultas[] = $q->sql;
+            }
         });
+
         $this->getJson('/api/customers?per_page=3')->assertOk();
         $comTres = count($consultas);
 
@@ -324,6 +332,8 @@ describe('desempenho da listagem', function (): void {
         $this->getJson('/api/customers?per_page=30')->assertOk();
         $comTrinta = count($consultas);
 
-        expect($comTrinta)->toBe($comTres);
+        // Dez vezes mais registros não pode custar nenhuma consulta a mais.
+        expect($comTrinta)->toBe($comTres)
+            ->and($comTres)->toBeLessThanOrEqual(2); // a página e a contagem total
     });
 });

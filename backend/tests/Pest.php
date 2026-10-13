@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
+use Illuminate\Auth\AuthManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,6 +28,53 @@ pest()->extend(TestCase::class)
     ->in('Feature');
 
 pest()->extend(TestCase::class)->in('Unit');
+
+/*
+|--------------------------------------------------------------------------
+| Sessão padrão dos testes de cliente
+|--------------------------------------------------------------------------
+|
+| Os testes de CRUD verificam cadastro, validação, filtros e paginação — não
+| autorização. Autenticar como administrador por padrão evita repetir a mesma
+| linha em cada um deles e, sobretudo, evita que a autenticação vire ruído
+| que esconde o que o teste de fato afirma.
+|
+| Autenticação e autorização têm testes próprios, em Feature/Auth, onde a
+| sessão é montada explicitamente em cada caso.
+|
+*/
+
+/*
+|--------------------------------------------------------------------------
+| Origem das requisições de teste
+|--------------------------------------------------------------------------
+|
+| O Sanctum só trata uma requisição como stateful — isto é, só inicia sessão
+| e aplica verificação de CSRF — quando ela vem de uma origem listada em
+| SANCTUM_STATEFUL_DOMAINS, e identifica a origem pelos cabeçalhos `Origin`
+| ou `Referer`. O cliente de teste do Laravel não envia nenhum dos dois, o
+| que faria toda requisição ser considerada stateless e o login falhar com
+| "Session store not set on request".
+|
+| Enviar o `Origin` reproduz o que o navegador de fato envia, em vez de
+| contornar o mecanismo: o caminho exercitado pelos testes é o mesmo que a
+| aplicação usa em produção.
+|
+*/
+
+pest()->beforeEach(function (): void {
+    $this->withHeader('Origin', 'http://localhost');
+})->in('Feature');
+
+/*
+|--------------------------------------------------------------------------
+| Sessão padrão dos testes de cliente
+|--------------------------------------------------------------------------
+*/
+
+pest()->beforeEach(function (): void {
+    $this->actingAs(User::factory()->admin()->create());
+})->in('Feature/Customers', 'Feature/Api');
 
 /*
 |--------------------------------------------------------------------------
@@ -79,4 +128,24 @@ function customerPayload(array $overrides = []): array
         'number' => '100',
         'complement' => 'Apto 12',
     ], $overrides);
+}
+
+/**
+ * Descarta os guards já resolvidos nesta aplicação de teste.
+ *
+ * Em produção cada requisição HTTP recebe um container novo, então o guard
+ * resolve o usuário do zero a partir da sessão. No teste o container é
+ * reaproveitado entre as chamadas, e o guard do Sanctum mantém em memória o
+ * usuário que resolveu antes — o que faz uma requisição posterior ao logout
+ * parecer autenticada mesmo com a sessão já encerrada.
+ *
+ * Chamar isto entre as requisições reproduz o comportamento real. Não é um
+ * contorno do mecanismo: a asserção seguinte passa a verificar a sessão, que
+ * é o que de fato autentica, em vez do cache do processo de teste.
+ */
+function forgetResolvedGuards(): void
+{
+    /** @var AuthManager $auth */
+    $auth = app('auth');
+    $auth->forgetGuards();
 }
