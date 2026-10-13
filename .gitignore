@@ -1,0 +1,43 @@
+# Dependências
+/backend/vendor/
+/frontend/node_modules/
+
+# Ambiente — nunca versionar segredos
+.env
+.env.*
+!.env.example
+/backend/.env
+/backend/.env.*
+!/backend/.env.example
+/frontend/.env
+/frontend/.env.*
+!/frontend/.env.example
+
+# Build
+/frontend/dist/
+/backend/public/build/
+/backend/public/hot
+/backend/public/storage
+
+# Runtime do Laravel
+/backend/storage/*.key
+/backend/storage/pail
+/backend/bootstrap/cache/*.php
+/backend/.phpunit.result.cache
+/backend/.phpunit.cache/
+/backend/auth.json
+
+# Cobertura e relatórios
+/backend/coverage/
+/frontend/coverage/
+/backend/.phpstan.cache/
+/frontend/playwright-report/
+/frontend/test-results/
+
+# Editores e sistema operacional
+/.idea/
+/.vscode/
+/.fleet/
+.DS_Store
+Thumbs.db
+*.swp
