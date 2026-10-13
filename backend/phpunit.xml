@@ -37,12 +37,28 @@
             O banco e distinto do de desenvolvimento porque a suite o
             recria entre execucoes.
         -->
+        <!--
+            Origem tratada como stateful pelo Sanctum durante os testes.
+            Precisa casar com o Origin que tests/Pest.php envia.
+        -->
+        <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost"/>
+
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_DATABASE" value="nogle_crud_test"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
+        <!--
+            Sessão em banco, não em array, durante os testes.
+
+            O driver `array` não persiste nada entre requisições: o login
+            pareceria funcionar apenas porque o guard mantém o usuário em
+            memória dentro do mesmo container, e o logout pareceria não
+            funcionar pelo mesmo motivo. Como a suíte já roda contra um
+            PostgreSQL real, usar o mesmo driver da aplicação faz os testes
+            de sessão exercitarem o mecanismo de verdade.
+        -->
+        <env name="SESSION_DRIVER" value="database"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Application;
@@ -7,6 +8,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -17,7 +19,27 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        /*
+         * Sanctum em modo SPA: autenticação por sessão com cookie, não por
+         * token.
+         *
+         * `statefulApi()` antepõe EnsureFrontendRequestsAreStateful ao grupo
+         * de middleware da API. Quando a requisição vem de um domínio
+         * listado em SANCTUM_STATEFUL_DOMAINS, o middleware ativa sessão,
+         * cookies criptografados e verificação de CSRF para aquela
+         * requisição — tornando a API stateful apenas para o próprio SPA.
+         *
+         * A escolha por sessão em vez de token atende ao requisito de "não
+         * armazenar tokens sensíveis no localStorage": o cookie é HttpOnly,
+         * portanto inacessível a JavaScript, o que o torna imune a roubo por
+         * XSS. Em troca, ele é enviado automaticamente pelo navegador e
+         * precisa de proteção CSRF — que é exatamente o que este middleware
+         * acrescenta.
+         *
+         * Nenhum token é emitido, então a tabela personal_access_tokens não
+         * é necessária e sua migration não é publicada.
+         */
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // A API responde apenas JSON. Sem isto, uma exceção numa rota de
@@ -52,6 +74,39 @@ return Application::configure(basePath: dirname(__DIR__))
                     ? 'Registro não encontrado.'
                     : 'Endpoint não encontrado.',
             ], Response::HTTP_NOT_FOUND);
+        });
+
+        // Mensagem de autorização em português.
+        //
+        // O padrão do Laravel é "This action is unauthorized.", em inglês, e
+        // ela chega ao usuário: a interface só usa mensagem própria quando o
+        // backend não envia nenhuma. Como todo o restante da aplicação está
+        // em português, a mistura de idiomas apareceria exatamente no
+        // momento em que o usuário mais precisa entender o que houve.
+        // Registrado para AccessDeniedHttpException, e não para
+        // AuthorizationException, pelo mesmo motivo do tratamento de 404
+        // acima: o Laravel converte a exceção de autorização antes de
+        // consultar estes renderizadores, e um handler registrado para a
+        // original nunca dispararia.
+        $exceptions->render(function (AccessDeniedHttpException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => 'Você não tem permissão para realizar esta operação.',
+            ], Response::HTTP_FORBIDDEN);
+        });
+
+        // Sessão ausente ou expirada, também em português.
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => 'Autenticação necessária. Entre para continuar.',
+            ], Response::HTTP_UNAUTHORIZED);
         });
 
         // Rede de segurança para violação de constraint de unicidade.
