@@ -1,0 +1,36 @@
+# Dependências: reinstaladas dentro da imagem, a partir dos arquivos de lock.
+backend/vendor/
+frontend/node_modules/
+
+# Ambiente — nunca entra na imagem.
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Build e artefatos de execução.
+frontend/dist/
+frontend/coverage/
+backend/coverage/
+backend/storage/logs/*
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/bootstrap/cache/*.php
+backend/.phpunit.result.cache
+backend/.phpunit.cache/
+
+# Histórico e ferramental: não têm função dentro da imagem e só a engordam.
+.git/
+.github/
+.claude/
+.idea/
+.vscode/
+docs/
+scripts/
+*.md

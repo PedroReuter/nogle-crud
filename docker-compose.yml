@@ -1,0 +1,134 @@
+# Ambiente completo da aplicação.
+#
+# Três serviços: PostgreSQL, a aplicação Laravel em PHP-FPM e o Nginx, que
+# serve o SPA já compilado e encaminha a API ao PHP. Front e API ficam na
+# mesma origem, o que dispensa CORS e permite cookie de sessão same-site.
+#
+# Subir tudo:   docker compose up --build
+# Acessar:      http://localhost:8080
+
+name: nogle-crud
+
+services:
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-nogle_crud}
+      POSTGRES_USER: ${DB_USERNAME:-nogle}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no arquivo .env}
+
+      # Locale e codificação fixados: a ordenação de nomes com acento
+      # depende deles, e deixá-los ao padrão da imagem faria a listagem
+      # ordenar diferente conforme o host.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C.UTF-8'
+
+    volumes:
+      # Volume nomeado: os dados sobrevivem a `docker compose down`. Só
+      # `down -v` os apaga, e isso precisa ser pedido explicitamente.
+      - database-data:/var/lib/postgresql/data
+
+    healthcheck:
+      # `pg_isready` é o que o serviço da aplicação espera para começar.
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-nogle} -d ${DB_DATABASE:-nogle_crud}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    # A porta do banco NÃO é publicada no host por padrão.
+    #
+    # Os outros serviços o alcançam pela rede interna do compose, e expor um
+    # banco na máquina do avaliador seria risco sem benefício. Para inspeção
+    # manual, descomente — e note que a porta é 55433 para não colidir com um
+    # PostgreSQL local.
+    # ports:
+    #   - '55433:5432'
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    restart: unless-stopped
+
+    depends_on:
+      database:
+        condition: service_healthy
+
+    environment:
+      APP_NAME: ${APP_NAME:-Nogle CRUD}
+      APP_ENV: ${APP_ENV:-production}
+      APP_KEY: ${APP_KEY:-}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+
+      DB_CONNECTION: pgsql
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-nogle_crud}
+      DB_USERNAME: ${DB_USERNAME:-nogle}
+      DB_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no arquivo .env}
+
+      SESSION_DRIVER: database
+      SESSION_DOMAIN: ${SESSION_DOMAIN:-null}
+      SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-false}
+      SESSION_SAME_SITE: lax
+
+      # A origem do navegador. Como o Nginx serve as duas pontas, é a
+      # própria URL da aplicação.
+      SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost:8080}
+
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      LOG_CHANNEL: stderr
+
+      # Semeia dados fictícios de demonstração na primeira subida.
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+
+    volumes:
+      # Apenas o storage é volume.
+      #
+      # O código NÃO é montado em volume: um volume nomeado só é
+      # inicializado a partir da imagem quando está vazio, então, depois da
+      # primeira subida, ele manteria a versão antiga do código e
+      # `docker compose up --build` continuaria executando o que já estava
+      # lá — um erro silencioso e difícil de diagnosticar. O código vive na
+      # imagem, que é reconstruída.
+      #
+      # O storage precisa persistir: é onde fica a chave da aplicação gerada
+      # na primeira subida, e perdê-la invalidaria todas as sessões abertas.
+      - application-storage:/var/www/html/storage
+
+    healthcheck:
+      test: ['CMD-SHELL', 'php -r "exit(0);"']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    restart: unless-stopped
+
+    depends_on:
+      app:
+        condition: service_started
+
+    ports:
+      # 8080 porque 80 e 8000 costumam estar ocupados na máquina de quem
+      # avalia.
+      - '${APP_PORT:-8080}:80'
+
+    healthcheck:
+      test: ['CMD-SHELL', 'wget --quiet --tries=1 --spider http://localhost/up || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  database-data:
+  application-storage:
