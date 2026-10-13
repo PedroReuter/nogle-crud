@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 
+import { usePostalCodeLookup } from '@/composables/usePostalCodeLookup'
 import { createCustomer, updateCustomer } from '@/services/customers'
 import { ApiError, type ValidationErrors } from '@/services/http'
 import { maskCpf, maskPhone, maskPostalCode } from '@/support/masks'
@@ -73,6 +74,18 @@ const apiErrors = ref<ValidationErrors>({})
 /** Erro que não pertence a um campo específico. */
 const formError = ref<string | null>(null)
 
+const postalCode = usePostalCodeLookup()
+
+/**
+ * Avisa que o endereço foi preenchido automaticamente.
+ *
+ * O requisito permite ajuste manual do que vier do CEP, então é importante
+ * deixar claro que aqueles campos foram preenchidos pela consulta e podem
+ * ser corrigidos — caso contrário o usuário pode achar que são somente
+ * leitura.
+ */
+const autofilled = ref(false)
+
 const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null)
 const firstFieldRef = ref<{ focus: () => void } | null>(null)
 const confirmingDiscard = ref(false)
@@ -104,6 +117,11 @@ watch(
     apiErrors.value = {}
     formError.value = null
     saving.value = false
+    autofilled.value = false
+
+    // Esquece o último CEP consultado: sem isso, editar um cliente cujo CEP
+    // é igual ao do cliente aberto antes não dispararia a consulta.
+    postalCode.reset()
 
     // Foco no primeiro campo ao abrir, requisito de acessibilidade: quem
     // navega por teclado precisa começar dentro do formulário, não fora dele.
@@ -135,6 +153,41 @@ function onMaskedInput(field: 'cpf' | 'phone' | 'postal_code', value: string): v
   const mask = { cpf: maskCpf, phone: maskPhone, postal_code: maskPostalCode }[field]
   form.value[field] = mask(value)
   clearApiError(field)
+
+  if (field === 'postal_code') {
+    void fillAddressFromPostalCode(form.value.postal_code)
+  }
+}
+
+/**
+ * Preenche cidade e estado — e, quando o serviço os devolve, também bairro
+ * e logradouro — a partir do CEP.
+ *
+ * Os campos preenchidos continuam editáveis: o requisito pede ajuste manual,
+ * e endereços novos ou com complemento de numeração frequentemente precisam
+ * de correção.
+ */
+async function fillAddressFromPostalCode(value: string): Promise<void> {
+  const address = await postalCode.lookup(value)
+
+  if (!address) return
+
+  // Cidade e estado são sobrescritos: são os campos que o requisito manda
+  // preencher e a resposta do serviço é mais confiável que a digitação.
+  form.value.city = address.city
+  form.value.state = (address.state || null) as typeof form.value.state
+
+  // Bairro e logradouro só preenchem campo vazio. O ViaCEP devolve string
+  // vazia para CEPs de logradouro único, e sobrescrever apagaria o que o
+  // usuário já tinha digitado.
+  if (address.street) form.value.street = address.street
+  if (address.neighborhood) form.value.neighborhood = address.neighborhood
+
+  for (const campo of ['city', 'state', 'street', 'neighborhood'] as const) {
+    clearApiError(campo)
+  }
+
+  autofilled.value = true
 }
 
 async function submit(): Promise<void> {
@@ -310,10 +363,22 @@ const complementRules = [maxLength(120)]
                 inputmode="numeric"
                 autocomplete="postal-code"
                 maxlength="9"
+                :loading="postalCode.loading.value"
                 :rules="postalCodeRules"
                 :error-messages="errorsFor('postal_code')"
                 @update:model-value="(value: string) => onMaskedInput('postal_code', value)"
-              />
+              >
+                <template #append-inner>
+                  <v-progress-circular
+                    v-if="postalCode.loading.value"
+                    indeterminate
+                    size="18"
+                    width="2"
+                    color="primary"
+                    aria-label="Consultando CEP"
+                  />
+                </template>
+              </v-text-field>
             </v-col>
 
             <v-col cols="12" sm="7" md="6">
@@ -386,6 +451,29 @@ const complementRules = [maxLength(120)]
               />
             </v-col>
           </v-row>
+
+          <!-- Falha na consulta de CEP não bloqueia o cadastro: o requisito
+               manda tratar CEP inexistente e indisponibilidade do serviço, e
+               a saída correta é informar e deixar preencher à mão. -->
+          <v-alert
+            v-if="postalCode.error.value"
+            type="warning"
+            variant="tonal"
+            density="compact"
+            class="mt-3"
+            role="status"
+            :text="postalCode.error.value"
+          />
+
+          <v-alert
+            v-else-if="autofilled"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mt-3"
+            role="status"
+            text="Endereço preenchido pelo CEP. Você pode ajustar os campos se necessário."
+          />
 
           <p class="text-caption text-medium-emphasis mt-4 mb-0">
             Campos marcados com * são obrigatórios.
