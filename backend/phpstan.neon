@@ -1,0 +1,27 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    # Os testes ficam fora da análise estática.
+    #
+    # O Pest executa cada teste como uma closure religada ao TestCase, e o
+    # PHPStan não resolve esse religamento: toda chamada a `$this->postJson()`
+    # dentro de um `it()` é reportada como método inexistente. Seriam ~100
+    # erros falsos, que só poderiam ser silenciados com um baseline grande o
+    # bastante para também esconder erros reais.
+    #
+    # O risco de não analisá-los é baixo, porque testes são verificados por
+    # execução, não por inferência: um erro de tipo num teste o faz falhar.
+    paths:
+        - app
+        - database
+        - routes
+
+    # Nível 8 em código novo: exige tipos declarados e trata a possibilidade
+    # de null como erro, que é justamente a classe de defeito que os testes
+    # de feature não pegam de forma confiável.
+    level: 8
+
+    # O Larastan resolve os tipos das colunas do Eloquent a partir do schema.
+    databaseMigrationsPath:
+        - database/migrations
