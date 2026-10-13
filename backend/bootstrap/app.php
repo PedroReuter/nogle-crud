@@ -40,6 +40,29 @@ return Application::configure(basePath: dirname(__DIR__))
          * é necessária e sua migration não é publicada.
          */
         $middleware->statefulApi();
+
+        /*
+         * Limite de requisições em toda a API.
+         *
+         * O Laravel 11 deixou de aplicar `throttle` ao grupo de API por
+         * padrão. Sem ele, um usuário autenticado poderia percorrer o
+         * cadastro inteiro em segundos e levar CPF, telefone e endereço de
+         * todos os clientes — a autorização impede alterar, não ler em
+         * escala.
+         *
+         * Vale para requisições autenticadas: a lista de prioridade do
+         * Laravel executa a autenticação antes do limite, de propósito, para
+         * que a contagem possa ser por usuário. Requisição anônima recebe
+         * 401 sem chegar aqui, e é limitada no Nginx (`limit_req` em
+         * docker/nginx/default.conf) — que é onde esse tipo de enxurrada
+         * custa pouco para barrar, antes de o PHP sequer iniciar. Inverter a
+         * ordem aqui trocaria a contagem por usuário por contagem por IP e
+         * contrariaria uma decisão deliberada do framework.
+         *
+         * O limite está definido em AppServiceProvider.
+         */
+        $middleware->api(append: ['throttle:api']);
+
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // A API responde apenas JSON. Sem isto, uma exceção numa rota de
