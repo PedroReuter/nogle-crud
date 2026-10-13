@@ -12,6 +12,8 @@ use App\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
 /**
  * Operações de cliente.
@@ -25,8 +27,42 @@ use Illuminate\Http\Response;
  * nada a entender. Quando surgir regra com substância, ela terá um
  * Service com motivo.
  */
-final class CustomerController
+final class CustomerController implements HasMiddleware
 {
+    /**
+     * Autorização de cada endpoint, declarada como middleware.
+     *
+     * Middleware, e não `Gate::authorize()` no corpo do método, por uma
+     * razão de ordem: o Form Request é resolvido — e portanto valida — na
+     * injeção de dependência do método, que acontece depois do corpo ter
+     * sido alcançado. Verificar ali faria um usuário sem permissão receber
+     * 422 com os erros de validação antes de receber 403, revelando as
+     * regras do formulário a quem não pode usá-lo. O middleware roda antes
+     * de qualquer validação.
+     *
+     * Também não usa `authorizeResource()`: inativar e reativar não têm
+     * equivalente no mapa padrão de um resource, e metade das verificações
+     * implícitas com a outra metade explícita seria pior de auditar do que
+     * todas visíveis nesta lista.
+     *
+     * O segundo argumento de `can:` é o nome do parâmetro de rota, de modo
+     * que a Policy recebe o próprio cliente — e não apenas a classe — nas
+     * operações que agem sobre um registro.
+     *
+     * @return array<int, Middleware>
+     */
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('can:viewAny,'.Customer::class, only: ['index']),
+            new Middleware('can:view,customer', only: ['show']),
+            new Middleware('can:create,'.Customer::class, only: ['store']),
+            new Middleware('can:update,customer', only: ['update']),
+            new Middleware('can:deactivate,customer', only: ['deactivate']),
+            new Middleware('can:reactivate,customer', only: ['reactivate']),
+        ];
+    }
+
     /**
      * GET /api/customers
      *
@@ -34,6 +70,7 @@ final class CustomerController
      */
     public function index(IndexCustomerRequest $request): AnonymousResourceCollection
     {
+
         $filters = $request->filters();
 
         $customers = Customer::query()
@@ -54,6 +91,7 @@ final class CustomerController
      */
     public function store(StoreCustomerRequest $request): JsonResponse
     {
+
         // `validated()` em vez de `all()`: apenas os campos que passaram
         // pelas regras chegam ao model, e o `$fillable` barra o que
         // escapasse daqui. São duas barreiras contra mass assignment,
@@ -70,6 +108,7 @@ final class CustomerController
      */
     public function show(Customer $customer): CustomerResource
     {
+
         return CustomerResource::make($customer);
     }
 
@@ -78,6 +117,7 @@ final class CustomerController
      */
     public function update(UpdateCustomerRequest $request, Customer $customer): CustomerResource
     {
+
         $customer->update($request->validated());
 
         return CustomerResource::make($customer);
@@ -93,6 +133,7 @@ final class CustomerController
      */
     public function deactivate(Customer $customer): CustomerResource
     {
+
         // Atribuição direta, não `update(['is_active' => ...])`: a coluna
         // está deliberadamente fora do `$fillable` para que nenhum `PUT`
         // consiga alterar a situação do cliente, e a atribuição em massa
@@ -108,6 +149,7 @@ final class CustomerController
      */
     public function reactivate(Customer $customer): CustomerResource
     {
+
         $customer->is_active = true;
         $customer->save();
 

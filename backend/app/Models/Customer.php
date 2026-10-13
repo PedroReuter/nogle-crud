@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\BrazilianState;
+use App\Policies\CustomerPolicy;
 use App\Support\Digits;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -31,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[UseFactory(CustomerFactory::class)]
+#[UsePolicy(CustomerPolicy::class)]
 class Customer extends Model
 {
     /** @use HasFactory<CustomerFactory> */
