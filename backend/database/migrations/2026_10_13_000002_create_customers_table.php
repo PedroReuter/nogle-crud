@@ -121,11 +121,12 @@ return new class extends Migration
              USING gin (immutable_unaccent(lower(name)) gin_trgm_ops)'
         );
 
-        // Busca por CPF é por prefixo (`LIKE '529%'`), atendida pelo índice
-        // btree da constraint de unicidade. Um índice trgm adicional para
-        // busca por dígitos no meio do CPF não se justifica: identificador
-        // se busca do começo, e o índice extra custaria escrita em troca de
-        // um caso de uso que não foi pedido.
+        // A busca por CPF é por prefixo (`LIKE '529%'`). O índice que a
+        // atende é criado na migration seguinte, com `bpchar_pattern_ops`:
+        // o btree da constraint de unicidade serve à igualdade, mas não à
+        // comparação de prefixo sob a collation deste banco. Busca por
+        // dígitos no meio do CPF não é atendida por índice, e não se
+        // justifica: identificador se busca do começo.
         DB::statement('CREATE INDEX customers_created_at_index ON customers (created_at)');
     }
 

@@ -151,6 +151,11 @@ class Customer extends Model
      * O termo é normalizado da mesma forma que na persistência, então o
      * usuário pode digitar com ou sem máscara e encontrar o registro.
      *
+     * A comparação por prefixo é atendida pelo índice
+     * `customers_cpf_prefix_index`, criado com `bpchar_pattern_ops` — o
+     * índice da constraint de unicidade serve à igualdade, mas não ao
+     * prefixo sob a collation deste banco.
+     *
      * @param  Builder<Customer>  $query
      */
     #[Scope]
