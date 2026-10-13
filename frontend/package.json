@@ -1,0 +1,46 @@
+{
+  "name": "nogle-crud-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@mdi/js": "^7.4.47",
+    "axios": "^1.20.0",
+    "vue": "^3.5.42",
+    "vue-router": "^4.6.4",
+    "vuetify": "^3.13.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^24.13.3",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "@vue/test-utils": "^2.5.1",
+    "@vue/tsconfig": "^0.9.1",
+    "eslint": "^9.39.5",
+    "eslint-plugin-vue": "^10.11.1",
+    "jiti": "^2.7.0",
+    "jsdom": "^28.1.0",
+    "prettier": "^3.9.10",
+    "resize-observer-polyfill": "^1.5.1",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.71.2",
+    "vite": "^8.3.0",
+    "vite-plugin-vuetify": "^2.1.3",
+    "vitest": "^5.0.4",
+    "vue-tsc": "^3.3.11"
+  },
+  "description": "Interface de gerenciamento de clientes — Desafio Técnico Nogle"
+}

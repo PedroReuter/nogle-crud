@@ -34,6 +34,9 @@
 /frontend/playwright-report/
 /frontend/test-results/
 
+# Ferramental de agente e editores
+/.claude/
+
 # Editores e sistema operacional
 /.idea/
 /.vscode/
