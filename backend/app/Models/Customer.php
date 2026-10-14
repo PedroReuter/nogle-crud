@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\BrazilianState;
+use App\Observers\CustomerObserver;
 use App\Policies\CustomerPolicy;
 use App\Support\Digits;
 use Database\Factories\CustomerFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -32,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
+#[ObservedBy(CustomerObserver::class)]
 #[UseFactory(CustomerFactory::class)]
 #[UsePolicy(CustomerPolicy::class)]
 class Customer extends Model
@@ -98,6 +102,16 @@ class Customer extends Model
             'state' => BrazilianState::class,
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * Trilha de auditoria deste cliente.
+     *
+     * @return HasMany<CustomerAudit, $this>
+     */
+    public function audits(): HasMany
+    {
+        return $this->hasMany(CustomerAudit::class);
     }
 
     /** Endereço completo, para a coluna única exigida na listagem. */
