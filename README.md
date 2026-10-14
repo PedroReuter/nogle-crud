@@ -58,6 +58,15 @@ separadas.
 - **Paginação server-side**, com ordenação restrita a colunas autorizadas.
 - **Limite de requisições** na API, contra extração em massa de dados
   pessoais.
+- **Trilha de auditoria** registrando quem alterou o quê e quando, sem
+  duplicar dados pessoais — guarda os nomes dos campos alterados, nunca os
+  valores.
+- **Direito à eliminação** (LGPD): exclusão definitiva, separada da
+  inativação e permitida apenas para clientes já inativos.
+- **Content-Security-Policy** restritiva, verificada no navegador: nenhuma
+  exceção aberta para script.
+- **Testes end-to-end** em Playwright, cobrindo os seis fluxos do requisito
+  mais a responsividade, contra o ambiente Docker.
 - **Docker Compose** com três serviços e subida em um comando.
 - **Integração contínua** no GitHub Actions: formatação, análise estática,
   testes das duas pontas, auditoria de dependências e build das imagens.
@@ -185,8 +194,17 @@ Ambos executam exatamente o que o pipeline de CI executa.
 
 | Suíte | Cobertura |
 |---|---|
-| Backend | 223 testes, 555 asserções, em 12 arquivos |
-| Frontend | 209 testes, em 10 arquivos |
+| Backend | 251 testes, 636 asserções |
+| Frontend | 218 testes |
+| End-to-end | 14 testes, em navegador real |
+
+Os testes end-to-end exigem a aplicação no ar e por isso ficam fora do
+`npm run check`, que não deve falhar por ambiente externo:
+
+```bash
+docker compose up -d
+cd frontend && npm run test:e2e
+```
 
 Também disponível:
 
@@ -305,6 +323,8 @@ Todos os endpoints exigem sessão autenticada.
 | PUT·PATCH | `/api/customers/{id}` | Editar |
 | PATCH | `/api/customers/{id}/deactivate` | Inativar |
 | PATCH | `/api/customers/{id}/reactivate` | Reativar |
+| GET | `/api/customers/{id}/audits` | Histórico de alterações |
+| DELETE | `/api/customers/{id}` | Eliminar definitivamente (LGPD) |
 
 Parâmetros de `GET /api/customers`: `name`, `cpf`, `status`
 (`active`·`inactive`·`all`), `sort`, `direction`, `per_page` (máximo 100) e
@@ -313,9 +333,11 @@ Parâmetros de `GET /api/customers`: `name`, `cpf`, `status`
 Respostas: `200`, `201`, `401` sem sessão, `403` sem permissão, `404`
 inexistente, `422` dados inválidos, `429` excesso de requisições.
 
-> Não há exclusão física. A rota `DELETE` não é registrada de propósito: o
-> requisito pede inativação, e expô-la seria oferecer uma operação que a
-> aplicação não deve ter.
+> **`DELETE` não é a inativação.** O requisito pede que inativar não apague,
+> e continua assim — esse é o `PATCH .../deactivate`. O `DELETE` atende ao
+> direito de eliminação da LGPD, só alcança clientes já inativos, e é
+> registrado na trilha de auditoria, que sobrevive ao registro apagado e
+> comprova o atendimento.
 
 ---
 
@@ -348,9 +370,6 @@ Declaradas abertamente, por serem escolhas conscientes e não descuidos:
   interface ambígua, sem que o requisito os peça.
 - **Busca por CPF é por prefixo.** Procurar por dígitos no meio do número não
   é atendida por índice; identificador se busca do começo.
-- **Sem testes end-to-end.** O requisito os coloca como opcionais. Os fluxos
-  foram exercitados manualmente no navegador e por um roteiro de verificação
-  contra o ambiente Docker, mas não há Playwright no repositório.
 - **Sem recuperação de senha nem cadastro de usuários pela interface.** Os
   usuários vêm de seeder, como o desafio prevê.
 - **A consulta de CEP depende do ViaCEP**, um serviço de terceiros. Falha e
@@ -361,6 +380,20 @@ Declaradas abertamente, por serem escolhas conscientes e não descuidos:
   anônimo é limitado no Nginx.
 - **`SESSION_SECURE_COOKIE` vem como `false`** no exemplo de ambiente, porque
   a demonstração roda em HTTP. Em produção com HTTPS precisa ser `true`.
+- **Sem controle de concorrência.** Dois administradores editando o mesmo
+  cliente: a última escrita vence, em silêncio. O `updated_at` já vai na
+  resposta da API, então travamento otimista seria um acréscimo pequeno.
+- **A trilha de auditoria não guarda valores anteriores**, por decisão de
+  minimização de dados. Não é possível reconstruir o estado antigo a partir
+  dela — apenas saber qual campo mudou, quando e por quem.
+- **LGPD parcialmente endereçada.** Há trilha de auditoria, direito à
+  eliminação e minimização de dados em log. Não há gestão de consentimento
+  (não existe fluxo de coleta no requisito) nem cifragem em repouso (é
+  configuração do servidor de banco, não da aplicação).
+- **`style-src` permite estilo embutido** na política de segurança de
+  conteúdo, porque o Vuetify posiciona overlays por atributo `style`. Nenhuma
+  exceção foi aberta para script, que é o que importa; e `img-src` restrito
+  bloqueia o caminho usual de exfiltração por CSS.
 
 ---
 

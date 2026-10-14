@@ -290,6 +290,96 @@ propósitos diferentes e podem divergir sem prejuízo.
 
 ---
 
+## 14. Trilha de auditoria sem valores
+
+**Decisão.** A trilha registra quem alterou, quando, e os **nomes** dos
+campos alterados — nunca os valores.
+
+**Alternativa descartada.** Guardar valor anterior e novo de cada campo, como
+faz a maioria das bibliotecas de auditoria.
+
+**Por quê.** Uma trilha com valores duplicaria CPF, telefone e endereço numa
+segunda tabela. Pior: inviabilizaria o direito à eliminação, porque apagar o
+cliente deixaria os dados dele vivos no histórico — e um histórico que
+preserva o que o titular pediu para apagar é um problema jurídico, não uma
+funcionalidade.
+
+**Custo.** Não é possível reconstruir o estado anterior a partir da trilha.
+Para o propósito de responsabilização — demonstrar que fulano alterou o
+telefone deste cliente naquele momento — o nome do campo basta.
+
+A trilha é alimentada por um Observer do Eloquent, e não por chamadas no
+controller: auditoria esquecida é pior que auditoria ausente, porque dá a
+impressão de registro completo onde há lacunas. Ligada ao ciclo de vida do
+model, nenhum caminho escapa — nem seeder, nem comando de console, nem um
+endpoint futuro que alguém acrescente sem lembrar dela.
+
+---
+
+## 15. Eliminação definitiva separada da inativação
+
+**Decisão.** Existe um `DELETE`, mas só alcança cliente já inativo, exige
+perfil de administrador e é registrado na trilha.
+
+**Tensão com o requisito.** O desafio diz que a inativação não deve apagar o
+registro — e ela não apaga. Esta é outra operação, com outro propósito:
+quando o titular exerce o direito de eliminação previsto na LGPD, inativar
+não basta, porque CPF, telefone e endereço continuariam armazenados.
+
+**Por que em dois passos.** Exigir inativação prévia impede apagar cadastro em
+uso por um clique errado, e dá oportunidade de reverter. É também a razão de
+a permissão `forceDelete` existir separada de `update`: alterar cadastro e
+apagá-lo definitivamente não deveriam andar juntas.
+
+**O que sobrevive.** A trilha de auditoria permanece, com o evento de
+eliminação. Como ela não guarda valores, o que resta é a prova de que um
+registro existiu e foi eliminado — sem o dado pessoal que a eliminação
+deveria remover.
+
+---
+
+## 16. Política de segurança de conteúdo restritiva
+
+**Decisão.** `script-src 'self'`, sem nenhuma exceção. `style-src` permite
+estilo embutido.
+
+**Por quê.** O build do Vite não gera script nem estilo embutido no HTML, e a
+aplicação não carrega nada de CDN — o que permitiu escrever uma política
+restritiva de verdade. A única exceção é para estilo, e foi **medida, não
+suposta**: com `style-src 'self'` o navegador bloqueia os atributos `style`
+que o Vuetify usa para posicionar overlays, menus e transições, e o layout
+quebra.
+
+**Por que a exceção é aceitável.** Estilo embutido é bem menos perigoso que
+script embutido: a exfiltração de dado por CSS depende de carregar recurso
+externo, e `img-src 'self' data:` já bloqueia esse caminho. A exceção que
+realmente importaria — `script-src 'unsafe-inline'` — não foi aberta.
+
+**Verificação.** O fluxo completo foi exercitado sob a política, com o
+console coletando violações: zero.
+
+---
+
+## 17. Testes end-to-end contra o ambiente Docker
+
+**Decisão.** O Playwright aponta para `http://localhost:8080`, o ambiente
+Docker, e não para o servidor de desenvolvimento.
+
+**Por quê.** É o ambiente mais próximo do que será avaliado: Nginx no lugar do
+proxy do Vite, `APP_ENV` de produção, caches de configuração e rota ligados,
+e opcache sem verificação de data. Nenhuma dessas quatro condições existe no
+desenvolvimento — e os defeitos deste projeto se concentraram justamente na
+junção entre as peças.
+
+**Custo.** Os testes exigem a aplicação no ar, e por isso ficam fora do
+`npm run check`. Um comando de verificação que falha por ambiente externo
+ensina a ignorar falhas.
+
+**Sem repetição automática.** `retries: 0`: um teste que só passa na segunda
+tentativa está escondendo instabilidade, não contornando-a.
+
+---
+
 ## Fluxo de uma requisição
 
 ```text

@@ -45,7 +45,7 @@ especificamente:
   `immutable_unaccent`.
 - Implementação da API, validações, Policies e autenticação.
 - Implementação da interface, componentes, composables e camada de serviços.
-- Escrita das suítes de teste — 223 testes no backend, 209 no frontend.
+- Escrita das suítes de teste — 251 no backend, 218 no frontend e 14 end-to-end.
 - Dockerfiles, configuração do Nginx e workflow de CI.
 - Investigação e correção de todos os defeitos listados adiante.
 - Medições de desempenho com volume sintético de 50 mil registros.
@@ -145,6 +145,26 @@ pela IA, pareciam corretos na leitura e **só foram descobertos ao executar**.
     normalmente: `localhost` resolve para `::1` dentro do container e o
     servidor escutava apenas IPv4.
 
+### Encontrados ao escrever os testes end-to-end
+
+14. **O rótulo "Senha" casava com dois elementos** — o campo e o ícone de
+    revelar senha, que o Vuetify rotula como "Senha ação depois". O teste
+    encontrava o elemento errado.
+15. **O contador de registros não era localizável** por `aria-live`, porque o
+    snackbar do Vuetify usa o mesmo atributo. Resolvido com um identificador
+    de teste explícito no elemento.
+16. **O seletor de situação não abria ao ser clicado pelo rótulo:** o `input`
+    interno do Vuetify é somente leitura, e o clique precisa ir ao invólucro
+    do campo. O teste travava esperando uma opção que nunca apareceria.
+17. **O Vitest passou a coletar os arquivos do Playwright**, porque ambos usam
+    a extensão `.spec.ts` dentro de `tests/`. Dois arquivos falhavam na
+    coleta sem que a contagem de testes acusasse nada.
+
+Nenhum destes é defeito da aplicação — são defeitos dos testes. Valem o
+registro porque mostram o custo real de escrever testes end-to-end: a maior
+parte do esforço não está no fluxo, está em localizar elementos de forma que
+não quebre.
+
 ### Encontrados por medição
 
 13. **Busca por prefixo de CPF fazia varredura sequencial** — 4,98 ms contra
@@ -172,6 +192,10 @@ A validação não foi por leitura. Cada afirmação tem um comando que a produz
 | ViaCEP | Contra o serviço real, incluindo CEP inexistente e condição de corrida |
 | Responsividade | Verificação programática de elementos excedendo a largura em 375px: zero |
 | Ambiente Docker | `down -v` seguido de `up`, mais 19 verificações funcionais |
+| Política de segurança de conteúdo | Fluxo completo exercitado sob a política, com o console coletando violações |
+| Trilha de auditoria | Teste afirmando que nenhum valor de CPF, nome ou telefone aparece na tabela |
+| Direito à eliminação | Teste confirmando que o dado some do banco e que o CPF volta a ficar disponível |
+| Fluxos end-to-end | 14 testes em navegador real contra o ambiente Docker |
 | Script SQL | Comparação automatizada com o esquema das migrations |
 
 ---
@@ -188,8 +212,9 @@ cuidadosa substituiu rodar o comando.
 **Erra com mais frequência nas bordas entre sistemas.** Note onde os defeitos
 se concentram: proxy do Vite, ordem de middleware do Laravel, herança de
 `add_header` no Nginx, resolução de IPv6 no container, Composer entre
-estágios de build. A lógica de negócio — validação de CPF, filtros,
-paginação — saiu correta de primeira. O que quebra é a junção.
+estágios de build, colisão de extensão entre dois executores de teste. A
+lógica de negócio — validação de CPF, filtros, paginação — saiu correta de
+primeira. O que quebra é a junção.
 
 **Repete o mesmo erro em contextos diferentes.** O handler registrado para a
 exceção errada aconteceu duas vezes, com três semanas de distância conceitual

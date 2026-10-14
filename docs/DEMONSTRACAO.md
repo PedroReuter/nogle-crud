@@ -215,6 +215,32 @@ console.log(r.status, await r.json())
 
 ---
 
+### 9b · Histórico e eliminação definitiva — 1min
+
+Volte ao perfil de administrador. Clique no ícone de histórico de um cliente.
+
+> "Toda alteração fica registrada: quem fez, quando, e quais campos mudaram.
+> Repare no aviso: o histórico guarda os **nomes** dos campos, não os valores.
+> Guardar os valores duplicaria CPF e endereço numa segunda tabela — e
+> impediria atender ao direito de eliminação, porque apagar o cliente
+> deixaria os dados dele vivos aqui."
+
+Feche. Agora mostre a eliminação:
+
+1. Tente eliminar um cliente **ativo** — a ação não aparece.
+2. Inative o cliente.
+3. Filtre por **Somente inativos**. Agora o ícone vermelho de eliminar aparece.
+4. Clique e mostre a confirmação, sem confirmar ainda.
+
+> "Isto é diferente de inativar, e a confirmação diz exatamente o quê: os
+> dados serão apagados e não poderão ser recuperados. Atende ao direito de
+> eliminação da LGPD. São dois passos de propósito — inativar primeiro impede
+> apagar cadastro em uso por um clique errado."
+
+Confirme e mostre que o cadastro sumiu.
+
+---
+
 ### 10 · Responsividade — 45s
 
 Abra as ferramentas de desenvolvedor e troque para visualização de celular
@@ -241,9 +267,15 @@ Volte ao desktop e mostre, no terminal:
 cd backend && composer check
 ```
 
-> "223 testes no backend, formatação verificada e análise estática em nível 8.
-> No frontend são mais 209 testes. É o mesmo conjunto que o GitHub Actions
+> "251 testes no backend, formatação verificada e análise estática em nível 8.
+> No frontend são mais 218 testes, além de 14 end-to-end. É o mesmo conjunto que o GitHub Actions
 > executa a cada push."
+
+Se houver tempo, rode também:
+
+```bash
+cd frontend && npm run test:e2e
+```
 
 Mostre rapidamente o repositório: `README.md`, `docs/ARCHITECTURE.md`,
 `docs/AI_USAGE.md` e `database/schema.sql`.
