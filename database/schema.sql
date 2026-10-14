@@ -171,6 +171,54 @@ CREATE INDEX customers_cpf_prefix_index ON customers (cpf bpchar_pattern_ops);
 CREATE INDEX customers_created_at_index ON customers (created_at);
 
 -- ---------------------------------------------------------------------------
+-- customer_audits — trilha de auditoria
+-- ---------------------------------------------------------------------------
+-- Atende ao princípio de responsabilização da LGPD: permitir demonstrar quem
+-- alterou dado pessoal, e quando.
+--
+-- O ponto central é o que esta tabela NÃO guarda. Uma trilha com valor antigo
+-- e novo duplicaria CPF, telefone e endereço numa segunda tabela — e
+-- inviabilizaria o direito à eliminação, porque apagar o cliente deixaria os
+-- dados dele vivos no histórico. Por isso são registrados apenas os NOMES dos
+-- campos alterados.
+CREATE TABLE customer_audits (
+    id             BIGSERIAL NOT NULL,
+
+    -- Sem chave estrangeira para customers, de propósito: a trilha precisa
+    -- sobreviver à eliminação do cliente, porque é ela que comprova que a
+    -- eliminação aconteceu.
+    customer_id    BIGINT NOT NULL,
+
+    -- Quem agiu. Nulo quando a ação não parte de uma sessão, como no seeder.
+    user_id        BIGINT,
+
+    event          VARCHAR(20) NOT NULL,
+
+    -- Apenas nomes de campos, nunca valores.
+    changed_fields JSONB,
+
+    -- Dado do operador, não do cliente, com finalidade de segurança.
+    ip_address     VARCHAR(45),
+
+    created_at     TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT customer_audits_pkey PRIMARY KEY (id),
+    CONSTRAINT customer_audits_user_id_foreign
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT customer_audits_event_check CHECK (
+        event IN ('created', 'updated', 'deactivated', 'reactivated', 'deleted')
+    )
+);
+
+-- Consulta típica: o histórico de um cliente, do mais recente ao mais antigo.
+CREATE INDEX customer_audits_customer_id_created_at_index
+    ON customer_audits (customer_id, created_at DESC);
+
+-- Consulta de investigação: o que determinado operador fez no período.
+CREATE INDEX customer_audits_user_id_created_at_index
+    ON customer_audits (user_id, created_at DESC);
+
+-- ---------------------------------------------------------------------------
 -- Tabelas de infraestrutura do Laravel
 -- ---------------------------------------------------------------------------
 -- Criadas pelo framework. `sessions` é usada pela autenticação por cookie,
@@ -271,6 +319,7 @@ INSERT INTO migrations (migration, batch) VALUES
     ('0001_01_01_000002_create_jobs_table', 1),
     ('2026_10_13_000001_enable_text_search_support', 1),
     ('2026_10_13_000002_create_customers_table', 1),
-    ('2026_10_13_000003_add_cpf_prefix_index_to_customers_table', 1);
+    ('2026_10_13_000003_add_cpf_prefix_index_to_customers_table', 1),
+    ('2026_10_14_000001_create_customer_audits_table', 1);
 
 COMMIT;
