@@ -163,6 +163,70 @@ jobs:
         run: npm audit --audit-level=high
 
   # ---------------------------------------------------------------------------
+  e2e:
+    name: End-to-end — fluxos principais no navegador
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Subir a aplicação
+        # Os testes rodam contra o ambiente Docker, não contra o servidor de
+        # desenvolvimento: é o mais próximo do que será avaliado — Nginx no
+        # lugar do proxy do Vite, APP_ENV de produção, caches ligados. Defeito
+        # na junção entre as peças só aparece aqui.
+        run: |
+          cp .env.example .env
+          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=senha-de-ci/' .env
+          docker compose up -d --build
+
+      - name: Aguardar a aplicação responder
+        run: |
+          for tentativa in $(seq 1 60); do
+            if curl -sf http://localhost:8080/up > /dev/null; then
+              echo "disponível após $((tentativa * 3))s"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "a aplicação não respondeu em 180s" >&2
+          docker compose logs --tail=80
+          exit 1
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: frontend
+        run: npm ci
+
+      - name: Instalar o navegador
+        working-directory: frontend
+        # Só o Chromium: os três navegadores custariam minutos de download a
+        # cada execução para cobrir diferenças que esta aplicação não explora.
+        run: npx playwright install --with-deps chromium
+
+      - name: Executar os testes end-to-end
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Guardar o relatório quando falhar
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+      - name: Logs dos containers quando falhar
+        if: failure()
+        run: docker compose logs --tail=200
+
+  # ---------------------------------------------------------------------------
   docker:
     name: Docker — construção das imagens
     runs-on: ubuntu-latest
