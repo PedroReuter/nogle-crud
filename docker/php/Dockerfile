@@ -10,6 +10,8 @@ FROM composer:2 AS vendor
 
 WORKDIR /app
 
+# Só os arquivos de dependência primeiro: assim a instalação é refeita
+# apenas quando eles mudam, e não a cada alteração de código.
 COPY backend/composer.json backend/composer.lock ./
 
 # `--no-dev` deixa fora Pest, Larastan e Pint: ferramentas de
@@ -17,13 +19,31 @@ COPY backend/composer.json backend/composer.lock ./
 # pacote a menos é menos superfície e menos peso.
 #
 # `--no-scripts` porque os scripts do Laravel precisam do código da
-# aplicação, que ainda não foi copiado neste estágio.
+# aplicação, que ainda não foi copiado; `--no-autoloader` porque o
+# autoloader precisa enxergar as classes da aplicação para ser otimizado.
 RUN composer install \
     --no-dev \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
     --no-interaction
+
+# Agora o código, e então o autoloader otimizado.
+#
+# O dump acontece AQUI, e não na imagem final: o Composer existe neste
+# estágio e não na outra, que é uma imagem de PHP-FPM enxuta. Fazê-lo lá
+# exigiria instalar o Composer numa imagem que nunca mais precisaria dele.
+COPY backend/ ./
+
+# `--optimize` monta o classmap completo, dispensando a busca por arquivo a
+# cada classe carregada. Sem `--classmap-authoritative`: ele faz o
+# autoloader recusar qualquer classe fora do mapa, o que quebra pacotes que
+# geram classe em tempo de execução — ganho marginal por um risco real.
+#
+# `--no-scripts` porque `package:discover` boota a aplicação, e isso exige
+# as extensões PHP e as variáveis de ambiente que só existem no container
+# final. A descoberta de pacotes acontece no entrypoint.
+RUN composer dump-autoload --no-dev --optimize --no-scripts --no-interaction
 
 # ---------------------------------------------------------------------------
 # Imagem da aplicação
@@ -50,13 +70,12 @@ COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-app.ini
 
 WORKDIR /var/www/html
 
-# O código vem antes do autoloader para que o dump do Composer enxergue as
-# classes da aplicação.
-COPY --chown=www-data:www-data backend/ ./
-COPY --from=vendor --chown=www-data:www-data /app/vendor ./vendor
+# A aplicação já vem do estágio anterior com as dependências instaladas e o
+# autoloader otimizado — esta imagem não precisa do Composer.
+COPY --from=vendor --chown=www-data:www-data /app ./
 
-RUN composer dump-autoload --no-dev --optimize --classmap-authoritative \
-    && mkdir -p storage/framework/{cache/data,sessions,views} storage/logs bootstrap/cache \
+RUN mkdir -p storage/framework/cache/data storage/framework/sessions \
+        storage/framework/views storage/logs bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R ug+rwX storage bootstrap/cache
 

@@ -80,11 +80,25 @@ if [ "${SEED_DEMO_DATA:-false}" = "true" ]; then
 
     if [ "${CLIENTES:-0}" = "0" ]; then
         echo "Semeando dados de demonstração…"
-        php artisan db:seed --force --no-interaction
+
+        # A falha ao semear não derruba o container. A aplicação funciona sem
+        # dados de demonstração, e abortar aqui produziria um laço de
+        # reinício — que esconde a causa em vez de mostrá-la, porque o log
+        # útil rola para fora da tela a cada tentativa.
+        if ! php artisan db:seed --force --no-interaction; then
+            echo "AVISO: os seeders falharam. A aplicação sobe sem dados de demonstração." >&2
+            echo "AVISO: rode 'docker compose exec app php artisan db:seed --force' após corrigir." >&2
+        fi
     else
         echo "Dados já existentes (${CLIENTES} clientes); seeders não executados."
     fi
 fi
+
+# Descoberta de pacotes: monta bootstrap/cache/packages.php a partir dos
+# provedores declarados pelas dependências. Roda aqui, e não no build, porque
+# boota a aplicação — e isso exige as extensões PHP e as variáveis de
+# ambiente que só existem neste container.
+php artisan package:discover --ansi
 
 # Caches de configuração e rotas: evitam ler e interpretar os arquivos a
 # cada requisição. Gerados aqui, e não na imagem, porque dependem das
