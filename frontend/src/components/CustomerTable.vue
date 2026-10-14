@@ -29,6 +29,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   edit: [customer: Customer]
+  history: [customer: Customer]
+  erase: [customer: Customer]
   deactivate: [customer: Customer]
   reactivate: [customer: Customer]
   'update:page': [page: number]
@@ -47,7 +49,7 @@ const headers = [
   { title: 'Telefone', key: 'phone_formatted', sortable: false },
   { title: 'Endereço completo', key: 'full_address', sortable: false },
   { title: 'Situação', key: 'is_active', sortable: false, width: 110 },
-  { title: 'Ações', key: 'actions', sortable: false, align: 'end' as const, width: 120 },
+  { title: 'Ações', key: 'actions', sortable: false, align: 'end' as const, width: 170 },
 ]
 
 type SortItem = { key: string; order?: 'asc' | 'desc' }
@@ -154,6 +156,33 @@ function onSortUpdate(sortBy: SortItem[]): void {
           :aria-label="`Reativar ${item.name}`"
           :title="props.canManage ? `Reativar ${item.name}` : 'Sem permissão para reativar'"
           @click="emit('reactivate', item)"
+        />
+
+        <!-- Histórico disponível também para o perfil de leitura:
+             fiscalizar não exige poder alterar. -->
+        <v-btn
+          icon="$history"
+          variant="text"
+          size="small"
+          density="comfortable"
+          :aria-label="`Histórico de ${item.name}`"
+          :title="`Histórico de alterações de ${item.name}`"
+          @click="emit('history', item)"
+        />
+
+        <!-- Eliminação definitiva só aparece para cliente já inativo. São
+             dois passos deliberados: inativar primeiro permite reverter, e
+             impede apagar cadastro em uso por um clique errado. -->
+        <v-btn
+          v-if="!item.is_active && props.canManage"
+          icon="$erase"
+          variant="text"
+          size="small"
+          density="comfortable"
+          color="error"
+          :aria-label="`Eliminar definitivamente ${item.name}`"
+          title="Eliminar definitivamente (LGPD)"
+          @click="emit('erase', item)"
         />
       </div>
     </template>

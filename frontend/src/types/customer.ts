@@ -160,3 +160,25 @@ export interface Credentials {
   email: string
   password: string
 }
+
+/* ----------------------------------------------------------------------
+ * Trilha de auditoria
+ * ------------------------------------------------------------------- */
+
+export type AuditEvent = 'created' | 'updated' | 'deactivated' | 'reactivated' | 'deleted'
+
+/**
+ * Um evento do histórico de um cliente.
+ *
+ * `changed_fields` traz NOMES de campos, nunca valores — a trilha do backend
+ * é deliberadamente desenhada assim, para não duplicar dado pessoal numa
+ * segunda tabela nem inviabilizar o direito à eliminação.
+ */
+export interface CustomerAudit {
+  id: number
+  event: AuditEvent
+  event_label: string
+  changed_fields: string[] | null
+  user: { id: number; name: string } | null
+  created_at: string
+}

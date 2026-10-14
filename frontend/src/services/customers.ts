@@ -1,4 +1,10 @@
-import type { Customer, CustomerPayload, CustomerQuery, PaginatedResponse } from '@/types/customer'
+import type {
+  Customer,
+  CustomerAudit,
+  CustomerPayload,
+  CustomerQuery,
+  PaginatedResponse,
+} from '@/types/customer'
 
 import { http, toApiError } from './http'
 import { onlyDigits } from '@/support/masks'
@@ -72,6 +78,32 @@ export async function reactivateCustomer(id: number): Promise<Customer> {
     const { data } = await http.patch<{ data: Customer }>(`/customers/${id}/reactivate`)
 
     return data.data
+  } catch (error) {
+    throw toApiError(error)
+  }
+}
+
+/**
+ * Elimina definitivamente o cadastro.
+ *
+ * Operação distinta da inativação, e com propósito distinto: atende ao
+ * direito de eliminação da LGPD. O backend só a permite para cliente já
+ * inativo, de modo que eliminar é sempre um segundo passo deliberado.
+ */
+export async function deleteCustomer(id: number): Promise<void> {
+  try {
+    await http.delete(`/customers/${id}`)
+  } catch (error) {
+    throw toApiError(error)
+  }
+}
+
+/** Histórico de alterações do cliente. */
+export async function fetchCustomerAudits(id: number): Promise<PaginatedResponse<CustomerAudit>> {
+  try {
+    const { data } = await http.get<PaginatedResponse<CustomerAudit>>(`/customers/${id}/audits`)
+
+    return data
   } catch (error) {
     throw toApiError(error)
   }

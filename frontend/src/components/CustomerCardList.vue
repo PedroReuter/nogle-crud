@@ -21,6 +21,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   edit: [customer: Customer]
+  history: [customer: Customer]
+  erase: [customer: Customer]
   deactivate: [customer: Customer]
   reactivate: [customer: Customer]
 }>()
@@ -104,6 +106,26 @@ const emit = defineEmits<{
           >
             Reativar
           </v-btn>
+
+          <v-btn
+            icon="$history"
+            variant="text"
+            size="small"
+            density="comfortable"
+            :aria-label="`Histórico de ${customer.name}`"
+            @click="emit('history', customer)"
+          />
+
+          <v-btn
+            v-if="!customer.is_active && props.canManage"
+            icon="$erase"
+            variant="text"
+            size="small"
+            density="comfortable"
+            color="error"
+            :aria-label="`Eliminar definitivamente ${customer.name}`"
+            @click="emit('erase', customer)"
+          />
         </v-card-actions>
       </v-card>
     </li>

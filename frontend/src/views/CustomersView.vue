@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDisplay } from 'vuetify'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import CustomerAuditDialog from '@/components/CustomerAuditDialog.vue'
 import CustomerCardList from '@/components/CustomerCardList.vue'
 import CustomerFilters from '@/components/CustomerFilters.vue'
 import CustomerFormDialog from '@/components/CustomerFormDialog.vue'
@@ -10,7 +11,7 @@ import CustomerTable from '@/components/CustomerTable.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useCustomerList } from '@/composables/useCustomerList'
 import { useNotifications } from '@/composables/useNotifications'
-import { deactivateCustomer, reactivateCustomer } from '@/services/customers'
+import { deactivateCustomer, deleteCustomer, reactivateCustomer } from '@/services/customers'
 import { ApiError } from '@/services/http'
 import type { Customer, SortableColumn } from '@/types/customer'
 
@@ -37,8 +38,11 @@ const editing = ref<Customer | null>(null)
 
 const confirmOpen = ref(false)
 const confirmTarget = ref<Customer | null>(null)
-const confirmAction = ref<'deactivate' | 'reactivate'>('deactivate')
+const confirmAction = ref<'deactivate' | 'reactivate' | 'erase'>('deactivate')
 const confirmLoading = ref(false)
+
+const historyOpen = ref(false)
+const historyTarget = ref<Customer | null>(null)
 
 /**
  * Permissão de escrita, vinda do perfil do usuário autenticado.
@@ -91,7 +95,25 @@ function askReactivate(customer: Customer): void {
   confirmOpen.value = true
 }
 
-async function confirmStatusChange(): Promise<void> {
+function openHistory(customer: Customer): void {
+  historyTarget.value = customer
+  historyOpen.value = true
+}
+
+/**
+ * Eliminação definitiva, em atendimento ao direito do titular.
+ *
+ * Só é oferecida para cliente já inativo — o backend também recusa o
+ * contrário. São dois passos deliberados, porque esta operação, diferente da
+ * inativação, não tem volta.
+ */
+function askErase(customer: Customer): void {
+  confirmTarget.value = customer
+  confirmAction.value = 'erase'
+  confirmOpen.value = true
+}
+
+async function runConfirmedAction(): Promise<void> {
   const customer = confirmTarget.value
   if (!customer || confirmLoading.value) return
 
@@ -101,21 +123,48 @@ async function confirmStatusChange(): Promise<void> {
     if (confirmAction.value === 'deactivate') {
       await deactivateCustomer(customer.id)
       notifySuccess(`Cliente ${customer.name} inativado.`)
-    } else {
+    } else if (confirmAction.value === 'reactivate') {
       await reactivateCustomer(customer.id)
       notifySuccess(`Cliente ${customer.name} reativado.`)
+    } else {
+      await deleteCustomer(customer.id)
+      notifySuccess(`Cadastro de ${customer.name} eliminado definitivamente.`)
     }
 
     confirmOpen.value = false
     list.refresh()
   } catch (error) {
-    notifyError(
-      error instanceof ApiError ? error.message : 'Não foi possível alterar a situação do cliente.',
-    )
+    notifyError(error instanceof ApiError ? error.message : 'Não foi possível concluir a operação.')
   } finally {
     confirmLoading.value = false
   }
 }
+
+/** Texto da confirmação, conforme a operação. */
+const CONFIRM_TEXTS = {
+  deactivate: {
+    title: 'Inativar cliente?',
+    label: 'Inativar',
+    color: 'error',
+    message: (nome: string) =>
+      `O cliente ${nome} deixará de aparecer na listagem de ativos. O registro é preservado e pode ser reativado depois.`,
+  },
+  reactivate: {
+    title: 'Reativar cliente?',
+    label: 'Reativar',
+    color: 'success',
+    message: (nome: string) => `O cliente ${nome} voltará a aparecer na listagem de ativos.`,
+  },
+  erase: {
+    title: 'Eliminar definitivamente?',
+    label: 'Eliminar definitivamente',
+    color: 'error',
+    // A mensagem diz exatamente o que acontece, porque esta operação não tem
+    // volta e é facilmente confundida com a inativação.
+    message: (nome: string) =>
+      `Todos os dados de ${nome} — CPF, telefone e endereço — serão apagados do banco e NÃO poderão ser recuperados. Esta operação atende ao direito de eliminação da LGPD e é diferente de inativar. O histórico de alterações é mantido, sem dados pessoais, como comprovação.`,
+  },
+} as const
 
 function onSort(sort: SortableColumn, direction: 'asc' | 'desc'): void {
   list.setSort(sort, direction)
@@ -131,7 +180,14 @@ function onSort(sort: SortableColumn, direction: 'asc' | 'desc'): void {
 
         <!-- `aria-live` faz o leitor de tela anunciar a nova contagem após
              uma busca, que de outro modo mudaria em silêncio. -->
-        <p class="text-body-2 text-medium-emphasis mb-0" aria-live="polite">
+        <!-- `data-testid` porque `aria-live="polite"` não identifica: o
+             snackbar do Vuetify usa o mesmo atributo, e um teste que buscasse
+             por ele casaria com os dois. -->
+        <p
+          class="text-body-2 text-medium-emphasis mb-0"
+          aria-live="polite"
+          data-testid="contador-registros"
+        >
           <template v-if="list.loading.value && list.meta.value.total === 0">
             Carregando…
           </template>
@@ -208,6 +264,8 @@ function onSort(sort: SortableColumn, direction: 'asc' | 'desc'): void {
         @edit="openEdit"
         @deactivate="askDeactivate"
         @reactivate="askReactivate"
+        @history="openHistory"
+        @erase="askErase"
         @update:page="list.goToPage"
         @update:per-page="list.setPerPage"
         @update:sort="onSort"
@@ -273,6 +331,8 @@ function onSort(sort: SortableColumn, direction: 'asc' | 'desc'): void {
           @edit="openEdit"
           @deactivate="askDeactivate"
           @reactivate="askReactivate"
+          @history="openHistory"
+          @erase="askErase"
         />
 
         <v-pagination
@@ -291,16 +351,14 @@ function onSort(sort: SortableColumn, direction: 'asc' | 'desc'): void {
 
     <ConfirmDialog
       v-model="confirmOpen"
-      :title="confirmAction === 'deactivate' ? 'Inativar cliente?' : 'Reativar cliente?'"
-      :message="
-        confirmAction === 'deactivate'
-          ? `O cliente ${confirmTarget?.name ?? ''} deixará de aparecer na listagem de ativos. O registro é preservado e pode ser reativado depois.`
-          : `O cliente ${confirmTarget?.name ?? ''} voltará a aparecer na listagem de ativos.`
-      "
-      :confirm-label="confirmAction === 'deactivate' ? 'Inativar' : 'Reativar'"
-      :confirm-color="confirmAction === 'deactivate' ? 'error' : 'success'"
+      :title="CONFIRM_TEXTS[confirmAction].title"
+      :message="CONFIRM_TEXTS[confirmAction].message(confirmTarget?.name ?? '')"
+      :confirm-label="CONFIRM_TEXTS[confirmAction].label"
+      :confirm-color="CONFIRM_TEXTS[confirmAction].color"
       :loading="confirmLoading"
-      @confirm="confirmStatusChange"
+      @confirm="runConfirmedAction"
     />
+
+    <CustomerAuditDialog v-model="historyOpen" :customer="historyTarget" />
   </v-container>
 </template>
