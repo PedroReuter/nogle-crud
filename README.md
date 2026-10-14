@@ -89,9 +89,16 @@ cd nogle-crud
 cp .env.example .env
 ```
 
-Abra o `.env` e defina uma senha em `DB_PASSWORD` — o Compose recusa subir
-sem ela, de propósito, para que ninguém acabe com um banco sem senha por
-descuido. Em seguida:
+Abra o `.env` e defina uma senha em `DB_PASSWORD`. Ela vem em branco de
+propósito: o Compose recusa subir enquanto estiver vazia, e deixar ali uma
+senha de exemplo que funcionasse faria todo mundo subir com a mesma senha
+conhecida. Qualquer valor serve para a avaliação local — por exemplo:
+
+```bash
+sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=uma-senha-qualquer/' .env
+```
+
+Em seguida:
 
 ```bash
 docker compose up --build
