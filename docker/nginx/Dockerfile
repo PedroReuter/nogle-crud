@@ -30,6 +30,10 @@ FROM nginx:1.27-alpine AS web
 # que é o diretório conf.d — dentro de um bloco `server` o Nginx recusa a
 # diretiva e se recusa a iniciar.
 COPY docker/nginx/rate-limit.conf /etc/nginx/conf.d/00-rate-limit.conf
+
+# Fora de conf.d: este arquivo é incluído explicitamente dentro de blocos
+# `server` e `location`, e não deve ser carregado sozinho no contexto http.
+COPY docker/nginx/security-headers.conf /etc/nginx/security-headers.conf
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 
 # Apenas o resultado do build entra na imagem final: nem node_modules, nem
