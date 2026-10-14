@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\IndexCustomerRequest;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
+use App\Http\Resources\CustomerAuditResource;
 use App\Http\Resources\CustomerResource;
 use App\Models\Customer;
 use Illuminate\Http\JsonResponse;
@@ -60,6 +61,8 @@ final class CustomerController implements HasMiddleware
             new Middleware('can:update,customer', only: ['update']),
             new Middleware('can:deactivate,customer', only: ['deactivate']),
             new Middleware('can:reactivate,customer', only: ['reactivate']),
+            new Middleware('can:view,customer', only: ['audits']),
+            new Middleware('can:forceDelete,customer', only: ['destroy']),
         ];
     }
 
@@ -154,5 +157,54 @@ final class CustomerController implements HasMiddleware
         $customer->save();
 
         return CustomerResource::make($customer);
+    }
+
+    /**
+     * GET /api/customers/{customer}/audits
+     *
+     * Histórico de quem alterou o quê e quando. Atende ao princípio de
+     * responsabilização da LGPD: é o que permite demonstrar o tratamento
+     * dado aos dados pessoais.
+     */
+    public function audits(Customer $customer): AnonymousResourceCollection
+    {
+        $audits = $customer->audits()
+            // `with` evita uma consulta por evento para buscar o operador.
+            ->with('user:id,name')
+            // Desempate por id: `created_at` tem precisão de segundo, e dois
+            // eventos no mesmo segundo — cadastrar e inativar em seguida, por
+            // exemplo — ficariam em ordem indefinida. Numa trilha de
+            // auditoria, ordem ambígua é defeito: ela existe para dizer o que
+            // veio antes.
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(20);
+
+        return CustomerAuditResource::collection($audits);
+    }
+
+    /**
+     * DELETE /api/customers/{customer}
+     *
+     * Eliminação definitiva, em atendimento ao direito do titular previsto
+     * na LGPD.
+     *
+     * Não é o oposto de cadastrar, e não substitui a inativação: o requisito
+     * do desafio pede que inativar não apague, e continua sendo assim. Esta
+     * operação existe para outro propósito — quando o titular pede que seus
+     * dados sejam eliminados, inativar não basta, porque o CPF, o telefone e
+     * o endereço continuariam armazenados.
+     *
+     * A Policy exige que o cliente já esteja inativo, o que torna a
+     * eliminação deliberada em dois passos.
+     *
+     * A trilha de auditoria registra o evento e sobrevive ao registro
+     * apagado — é ela que comprova que a eliminação foi atendida.
+     */
+    public function destroy(Customer $customer): Response
+    {
+        $customer->delete();
+
+        return response()->noContent();
     }
 }

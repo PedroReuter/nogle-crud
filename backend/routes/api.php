@@ -26,11 +26,18 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('me', [AuthController::class, 'me'])->name('me');
 
-    // `destroy` não é registrado: o requisito pede inativação, não exclusão,
-    // e expor DELETE significaria oferecer uma operação que a aplicação não
-    // deve ter.
-    Route::apiResource('customers', CustomerController::class)
-        ->except(['destroy']);
+    // `destroy` está registrado, mas NÃO é a inativação.
+    //
+    // O requisito é claro: inativar não apaga, e continua não apagando — essa
+    // é a rota `deactivate`. O DELETE existe para outro propósito, a
+    // eliminação definitiva prevista na LGPD, quando o titular pede que seus
+    // dados sejam apagados. A Policy exige que o cliente já esteja inativo,
+    // de modo que eliminar é sempre um segundo passo deliberado.
+    Route::apiResource('customers', CustomerController::class);
+
+    // Histórico de alterações, para responsabilização.
+    Route::get('customers/{customer}/audits', [CustomerController::class, 'audits'])
+        ->name('customers.audits');
 
     Route::patch('customers/{customer}/deactivate', [CustomerController::class, 'deactivate'])
         ->name('customers.deactivate');

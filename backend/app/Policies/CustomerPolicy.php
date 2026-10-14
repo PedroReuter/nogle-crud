@@ -65,4 +65,23 @@ final class CustomerPolicy
     {
         return $user->role->canManageCustomers();
     }
+
+    /**
+     * Eliminação definitiva do cadastro.
+     *
+     * Operação distinta da inativação, com propósito distinto: atender ao
+     * direito de eliminação previsto na LGPD, quando o titular solicita que
+     * seus dados sejam apagados. A inativação continua sendo o caminho
+     * normal, e continua não apagando nada.
+     *
+     * Exige que o cliente já esteja inativo. São dois passos deliberados:
+     * ninguém elimina um cadastro em uso por um clique errado, e a
+     * inativação prévia dá oportunidade de reverter. É também a razão de
+     * esta permissão existir separada de `update` — alterar cadastro e
+     * apagá-lo definitivamente não deveriam andar juntas.
+     */
+    public function forceDelete(User $user, Customer $customer): bool
+    {
+        return $user->role->canManageCustomers() && ! $customer->is_active;
+    }
 }

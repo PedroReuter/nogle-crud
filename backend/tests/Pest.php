@@ -74,7 +74,7 @@ pest()->beforeEach(function (): void {
 
 pest()->beforeEach(function (): void {
     $this->actingAs(User::factory()->admin()->create());
-})->in('Feature/Customers', 'Feature/Api');
+})->in('Feature/Customers', 'Feature/Api', 'Feature/Privacy');
 
 /*
 |--------------------------------------------------------------------------

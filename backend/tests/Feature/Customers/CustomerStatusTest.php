@@ -113,15 +113,24 @@ describe('reativação de cliente', function (): void {
     });
 });
 
-describe('exclusão física', function (): void {
-    it('não oferece endpoint de exclusão', function (): void {
-        // A rota `destroy` não é registrada de propósito: o requisito pede
-        // inativação, e expor DELETE significaria oferecer uma operação que
-        // a aplicação não deve ter.
+describe('inativação não é exclusão', function (): void {
+    it('não permite apagar um cliente ativo', function (): void {
+        // Existe uma rota DELETE, mas ela atende ao direito de eliminação da
+        // LGPD — não é o caminho da inativação, e não alcança cliente ativo.
+        // O requisito do desafio continua valendo: inativar preserva o
+        // registro. A cobertura completa da eliminação está em
+        // tests/Feature/Privacy/DataErasureTest.php.
         $customer = Customer::factory()->create();
 
-        $this->deleteJson("/api/customers/{$customer->id}")
-            ->assertStatus(405);
+        $this->deleteJson("/api/customers/{$customer->id}")->assertForbidden();
+
+        $this->assertDatabaseCount('customers', 1);
+    });
+
+    it('inativar não reduz a contagem de registros', function (): void {
+        $customer = Customer::factory()->create();
+
+        $this->patchJson("/api/customers/{$customer->id}/deactivate")->assertOk();
 
         $this->assertDatabaseCount('customers', 1);
     });
