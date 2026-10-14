@@ -123,7 +123,13 @@ services:
       - '${APP_PORT:-8080}:80'
 
     healthcheck:
-      test: ['CMD-SHELL', 'wget --quiet --tries=1 --spider http://localhost/up || exit 1']
+      # 127.0.0.1, e não `localhost`.
+      #
+      # Dentro do container `localhost` resolve primeiro para ::1, e o wget do
+      # BusyBox tenta IPv6 antes de IPv4. O Nginx passou a escutar nas duas
+      # pilhas, mas o endereço explícito deixa o healthcheck independente da
+      # ordem de resolução — que é detalhe da imagem base e pode mudar.
+      test: ['CMD-SHELL', 'wget --quiet --tries=1 --spider http://127.0.0.1/up || exit 1']
       interval: 10s
       timeout: 5s
       retries: 3
