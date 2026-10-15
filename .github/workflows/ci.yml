@@ -148,7 +148,17 @@ jobs:
 
       - name: Auditar dependências PHP
         working-directory: backend
-        run: composer audit --no-interaction
+        # `--locked` audita o composer.lock, sem precisar instalar nada.
+        #
+        # Não é só para evitar o `composer install`: sem a flag, o Composer
+        # audita o que está instalado — e num runner limpo não há nada
+        # instalado. Dependendo da versão, ele falha (foi o que aconteceu) ou,
+        # pior, responde "No packages - skipping audit" e sai com zero,
+        # deixando um job de segurança verde que não verificou coisa alguma.
+        #
+        # O lock é o que determina as versões instaladas e é o que está
+        # versionado, então auditá-lo é a verificação correta aqui.
+        run: composer audit --locked --no-interaction
 
       - name: Configurar Node
         uses: actions/setup-node@v4
